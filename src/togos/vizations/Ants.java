@@ -292,7 +292,7 @@ public class Ants
 	
 	public void runInWindow() throws Exception {
 		boolean writeImages = true;
-		int scale = writeImages ? 1 : 4;
+		int scale = 1;
 		
 		final Frame f = new Frame("PPP1");
 		final ImageCanvas c = new ImageCanvas();
