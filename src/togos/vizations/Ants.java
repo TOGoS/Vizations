@@ -291,8 +291,10 @@ public class Ants
 	}
 	
 	public void runInWindow() throws Exception {
-		boolean writeImages = true;
+		boolean writeImages = false;
 		int scale = 1;
+		int setCount = writeImages ? 7 : Integer.MAX_VALUE;
+		int framesPerSet = 1024;
 		
 		final Frame f = new Frame("PPP1");
 		final ImageCanvas c = new ImageCanvas();
@@ -312,7 +314,6 @@ public class Ants
 		
 		Color successOverlayColor = new Color(1,1,1,0.5f);
 		BufferedImage img = new BufferedImage(map.w*scale, map.h*scale, BufferedImage.TYPE_INT_ARGB);
-		int setCount = writeImages ? 7 : Integer.MAX_VALUE;
 		for( int set=0; set<setCount; ++set ) {
 			initMap(set);
 			feedings = 0;
@@ -320,7 +321,7 @@ public class Ants
 			File setDir = new File( runDir, String.format("set-%04d", set) );
 			if( writeImages ) setDir.mkdirs();
 			
-			for( int frame=0; frame<1024; ++frame ) {
+			for( int frame=0; frame<framesPerSet; ++frame ) {
 				synchronized(img) {
 					Graphics g = img.getGraphics();
 					draw(map, g, scale);
@@ -333,6 +334,8 @@ public class Ants
 				updateMap();
 			}
 		}
+		
+		f.dispose();
 	}
 	
 	public static void main(String[] args) {
