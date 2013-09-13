@@ -223,3 +223,12 @@ public class Stars
 		}
 	}
 }
+
+/*
+ * 3D rendering
+ * 
+ * camera quaternion -> camera transform matrix -> view transform matrix
+ * view transform matrix, fov -> projection
+ * 
+ * projection(relative x, y, z) -> screen x, y, scale (scale = 1 for object at distance 1)  
+ */
