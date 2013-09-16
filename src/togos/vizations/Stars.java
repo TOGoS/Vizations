@@ -99,12 +99,14 @@ public class Stars
 	static class StarRenderer {
 		final int w, h;
 		final float[] r, g, b;
+		final FMatrix[] xfStack = new FMatrix[64];
 		
 		public StarRenderer( int w, int h ) {
 			this.w = w; this.h = h;
 			this.r = new float[w*h];
 			this.g = new float[w*h];
 			this.b = new float[w*h];
+			for( int i=0; i<xfStack.length; ++i ) xfStack[i] = new FMatrix(4,4);
 		}
 		
 		protected static int toByte( float c ) {
@@ -145,11 +147,10 @@ public class Stars
 				// such that area can still be computed,
 				// or else do some special case for hugeness.
 				int minX = (int)(x - apparentRadius    );
-				int maxX = (int)(x + apparentRadius + 1);
+				int maxX = (int)(x + pixelDiam);
 				int minY = (int)(y - apparentRadius    );
-				int maxY = (int)(y + apparentRadius + 1);
-				int pixelArea = (maxX-minX)*(maxY-minY);
-				float luminosityPerPixel = 1 / scale / pixelArea;
+				int maxY = (int)(y + pixelDiam);
+				float luminosityPerPixel = 0.2f;
 				float pr = n.totalLuminosity.r * luminosityPerPixel;
 				float pg = n.totalLuminosity.g * luminosityPerPixel;
 				float pb = n.totalLuminosity.b * luminosityPerPixel;
@@ -180,6 +181,7 @@ public class Stars
 		
 		final Frame f = new Frame("Stars");
 		final ImageCanvas ic = new ImageCanvas();
+		ic.setBackground(Color.BLACK);
 		ic.setImage(image);
 		f.add(ic);
 		f.pack();
@@ -191,7 +193,7 @@ public class Stars
 			}
 		});
 		
-		StarNode starNode = new SolidNode(0.01f, new Luminosity(1000,1000,1000));
+		StarNode starNode = new SolidNode(0.01f, new Luminosity(5,4,3));
 		StarRenderer renderer = new StarRenderer( w, h );
 		
 		Set<StarNodeBinding> chrilden = new HashSet<StarNodeBinding>();
@@ -209,10 +211,19 @@ public class Stars
 		
 		starNode = new CompoundNode(chrilden);
 		
+		chrilden = new HashSet<StarNodeBinding>();
+		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.00f, -1.0f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.25f, -1.1f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.50f, -1.2f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.75f, -1.3f, starNode));
+		
+		starNode = new CompoundNode(chrilden);
+		
 		double phase = 0.0;
+		int i = 1;
 		while( true ) {
 			renderer.clear();
-			renderer.draw(phase, starNode, w/2f, h/2f, Math.min(w,h)/2f);
+			renderer.draw(phase, starNode, w/2f, h/2f, Math.min(w,h)*10/i);
 			renderer.toRGB(pixBuf);
 			synchronized( image ) {
 				image.setRGB(0, 0, w, h, pixBuf, 0, w);
@@ -220,6 +231,7 @@ public class Stars
 			ic.setImage(image);
 			Thread.sleep(50);
 			phase += 0.01;
+			++i;
 		}
 	}
 }
