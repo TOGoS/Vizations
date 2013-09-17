@@ -21,10 +21,10 @@ public class Stars
 {
 	//// Data classes
 	
-	static class Luminosity {
+	static class FColor {
 		public final float r, g, b;
 		
-		public Luminosity( float r, float g, float b ) {
+		public FColor( float r, float g, float b ) {
 			this.r = r;
 			this.g = g;
 			this.b = b;
@@ -33,14 +33,14 @@ public class Stars
 	
 	static abstract class StarNode {
 		final float maximumOuterRadius;
-		final Luminosity totalLuminosity;
+		final FColor totalLuminance; // Pixel color per area ('area' being rad*rad*4) 
 		
 		abstract boolean isSolid();
 		abstract Set<StarNodeBinding> getChildren();
 		
-		public StarNode( float r, Luminosity l ) {
+		public StarNode( float r, FColor l ) {
 			this.maximumOuterRadius = r;
-			this.totalLuminosity = l;
+			this.totalLuminance = l;
 		}
 	}
 	
@@ -67,14 +67,16 @@ public class Stars
 	static class CompoundNode extends StarNode {
 		final Set<StarNodeBinding> children;
 		
-		static Luminosity sumLuminosity( Set<StarNodeBinding> children ) {
+		static FColor sumLuminosity( Set<StarNodeBinding> children, float agRad ) {
 			float r = 0, g = 0, b = 0;
 			for( StarNodeBinding c : children ) {
-				r += c.child.totalLuminosity.r;
-				g += c.child.totalLuminosity.g;
-				b += c.child.totalLuminosity.b;
+				float area = c.child.maximumOuterRadius*c.child.maximumOuterRadius;
+				r += c.child.totalLuminance.r * area;
+				g += c.child.totalLuminance.g * area;
+				b += c.child.totalLuminance.b * area;
 			}
-			return new Luminosity(r,g,b);
+			float agArea = agRad*agRad;
+			return new FColor(r/agArea,g/agArea,b/agArea);
 		}
 		
 		static float sumOuterRadius( Set<StarNodeBinding> children ) {
@@ -85,8 +87,14 @@ public class Stars
 			return total;
 		}
 		
-		public CompoundNode( Set<StarNodeBinding> children ) {
-			super( sumOuterRadius(children), sumLuminosity(children) );
+		public static CompoundNode aggregate( Set<StarNodeBinding> children ) {
+			float rad = sumOuterRadius(children);
+			FColor lum = sumLuminosity(children, rad);
+			return new CompoundNode( rad, lum, children );
+		}
+		
+		private CompoundNode( float rad, FColor lum, Set<StarNodeBinding> children ) {
+			super( rad, lum );
 			this.children = children;
 		}
 		
@@ -98,7 +106,7 @@ public class Stars
 		public boolean isSolid() { return true; }
 		public Set<StarNodeBinding> getChildren() { return Collections.emptySet(); }
 		
-		public SolidNode( float r, Luminosity l ) {
+		public SolidNode( float r, FColor l ) {
 			super(r, l);
 		}
 	}
@@ -191,13 +199,15 @@ public class Stars
 				int iMinY = (int)minY; 	int iMaxY = (int)maxY;
 				
 				float pixelArea = pixelDiam*pixelDiam;
-				float marmar = n.maximumOuterRadius*n.maximumOuterRadius;
+				float brightnessPerPixel = pixelArea / ((iMaxX-iMinX)*(iMaxY-iMinY));
+				float pr = brightnessPerPixel * n.totalLuminance.r;
+				float pg = brightnessPerPixel * n.totalLuminance.g;
+				float pb = brightnessPerPixel * n.totalLuminance.b;
 				
-				float brightness = pixelArea / marmar;
 				for( int py=iMinY; py<iMaxY; ++py ) for( int px=iMinX, i=py*w+px; px<iMaxX; ++px, ++i ) {
-					r[i] += brightness * n.totalLuminosity.r;
-					g[i] += brightness * n.totalLuminosity.g;
-					b[i] += brightness * n.totalLuminosity.b;
+					r[i] += pr;
+					g[i] += pg;
+					b[i] += pb;
 				}
 			} else {
 				++xfIndex;
@@ -241,49 +251,49 @@ public class Stars
 			}
 		});
 		
-		StarNode starNode = new SolidNode(0.5f, new Luminosity(0.4f, 0.2f, 0.1f));
+		StarNode starNode = new SolidNode(0.5f, new FColor(4f, 2f, 1f));
 		StarRenderer renderer = new StarRenderer( w, h );
 		
 		Set<StarNodeBinding> chrilden = new HashSet<StarNodeBinding>();
 		chrilden.add(new StarNodeBinding(1, 0, 0, 2f, 0.00f, 2f, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 0, 2f, 0.33f, 2f, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 0, 2f, 0.66f, 2f, starNode));
-		starNode = new CompoundNode(chrilden);
+		starNode = CompoundNode.aggregate(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
 		chrilden.add(new StarNodeBinding(0, 1, 0, 6, 0.00f, -1, starNode));
 		chrilden.add(new StarNodeBinding(0, 1, 1, 6, 0.25f, -0.8f, starNode));
 		chrilden.add(new StarNodeBinding(1, 1, 0, 6, 0.50f, -1, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 1, 6, 0.75f, -0.8f, starNode));
-		starNode = new CompoundNode(chrilden);
+		starNode = CompoundNode.aggregate(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
 		chrilden.add(new StarNodeBinding(0, 1, 0, 24, 0.00f, -0.5f, starNode));
 		chrilden.add(new StarNodeBinding(0, 1, 1, 24, 0.25f, -0.5f, starNode));
 		chrilden.add(new StarNodeBinding(1, 1, 0, 24, 0.50f, -0.5f, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 1, 24, 0.75f, -0.5f, starNode));
-		starNode = new CompoundNode(chrilden);
+		starNode = CompoundNode.aggregate(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
 		chrilden.add(new StarNodeBinding(0, 1, 0, 96, 0.00f, -0.2f, starNode));
 		chrilden.add(new StarNodeBinding(0, 1, 1, 96, 0.25f, -0.2f, starNode));
 		chrilden.add(new StarNodeBinding(1, 1, 0, 96, 0.50f, -0.2f, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 1, 96, 0.75f, -0.2f, starNode));
-		starNode = new CompoundNode(chrilden);
-
+		starNode = CompoundNode.aggregate(chrilden);
+		
 		chrilden = new HashSet<StarNodeBinding>();
 		chrilden.add(new StarNodeBinding(0, 1, 0, 200, 0.00f, -0.05f, starNode));
 		chrilden.add(new StarNodeBinding(0, 1, 1, 200, 0.25f, -0.05f, starNode));
 		chrilden.add(new StarNodeBinding(1, 1, 0, 200, 0.50f, -0.05f, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 1, 200, 0.75f, -0.05f, starNode));
-		starNode = new CompoundNode(chrilden);
+		starNode = CompoundNode.aggregate(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
 		chrilden.add(new StarNodeBinding(0, 1, 0, 500, 0.00f, -0.005f, starNode));
 		chrilden.add(new StarNodeBinding(0, 1, 1, 500, 0.25f, -0.005f, starNode));
 		chrilden.add(new StarNodeBinding(1, 1, 0, 500, 0.50f, -0.005f, starNode));
 		chrilden.add(new StarNodeBinding(1, 0, 1, 500, 0.75f, -0.005f, starNode));
-		starNode = new CompoundNode(chrilden);
+		starNode = CompoundNode.aggregate(chrilden);
 		
 		float gSize = 1500;
 		for( int i=0; i<10; ++i, gSize*=2 ) {
@@ -293,7 +303,7 @@ public class Stars
 			chrilden.add(new StarNodeBinding(1, 1, 0, gSize, 0.1f*i+0.50f, -0.0001f, starNode));
 			chrilden.add(new StarNodeBinding(1, 0, 1, gSize, 0.1f*i+0.75f, -0.0001f, starNode));
 			chrilden.add(new StarNodeBinding(1, 0, 1,     0,        0.00f, -0.0001f, starNode));
-			starNode = new CompoundNode(chrilden);
+			starNode = CompoundNode.aggregate(chrilden);
 		}
 		
 		final int totalFrameCount = 10*30*60;
