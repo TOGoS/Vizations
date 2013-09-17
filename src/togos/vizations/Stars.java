@@ -113,29 +113,37 @@ public class Stars
 	
 	//// Render
 	
-	static class StarRenderer {
-		static final FMatrix IDENTITY_VECTOR = new FMatrix(1,4);
-		static final FMatrix X_VECTOR = new FMatrix(1,4);
-		static {
-			IDENTITY_VECTOR.put(0,3,1);
-			X_VECTOR.put(0,3,1);
-			X_VECTOR.put(0,0,1);
-		}
-				
+	static class RenderBuffer {
 		final int w, h;
 		final float[] r, g, b;
-		final FMatrix[] xfStack = new FMatrix[64];
-		int xfIndex = 0;
-		final FMatrix scratchVector = new FMatrix(1,4);
-		final FMatrix scratchMatrix = new FMatrix(4,4);
-		final FAxisAngle scratchAxisAngle = new FAxisAngle();
 		
-		public StarRenderer( int w, int h ) {
+		public RenderBuffer( int w, int h ) {
 			this.w = w; this.h = h;
 			this.r = new float[w*h];
 			this.g = new float[w*h];
 			this.b = new float[w*h];
-			for( int i=0; i<xfStack.length; ++i ) xfStack[i] = new FMatrix(4,4);
+		}
+		
+		public void copyFrom( RenderBuffer oth ) {
+			assert oth.w == this.w;
+			assert oth.h == this.h;
+			
+			for( int i=w*h-1; i>=0; --i ) {
+				r[i] = oth.r[i];
+				g[i] = oth.g[i];
+				b[i] = oth.b[i];
+			}
+		}
+		
+		public void addFrom( RenderBuffer oth, float scale ) {
+			assert oth.w == this.w;
+			assert oth.h == this.h;
+			
+			for( int i=w*h-1; i>=0; --i ) {
+				r[i] += oth.r[i] * scale;
+				g[i] += oth.g[i] * scale;
+				b[i] += oth.b[i] * scale;
+			}
 		}
 		
 		protected static int toByte( float c ) {
@@ -158,6 +166,35 @@ public class Stars
 			for( int i=w*h-1; i>=0; --i ) r[i] = g[i] = b[i] = 0;
 		}
 		
+		public void multiply( float s ) {
+			for( int i=w*h-1; i>=0; --i ) {
+				r[i] *= s;
+				g[i] *= s;
+				b[i] *= s;
+			}
+		}
+	}
+	
+	static class StarRenderer extends RenderBuffer {
+		static final FMatrix IDENTITY_VECTOR = new FMatrix(1,4);
+		static final FMatrix X_VECTOR = new FMatrix(1,4);
+		static {
+			IDENTITY_VECTOR.put(0,3,1);
+			X_VECTOR.put(0,3,1);
+			X_VECTOR.put(0,0,1);
+		}
+				
+		final FMatrix[] xfStack = new FMatrix[64];
+		int xfIndex = 0;
+		final FMatrix scratchVector = new FMatrix(1,4);
+		final FMatrix scratchMatrix = new FMatrix(4,4);
+		final FAxisAngle scratchAxisAngle = new FAxisAngle();
+		
+		public StarRenderer( int w, int h ) {
+			super(w, h);
+			for( int i=0; i<xfStack.length; ++i ) xfStack[i] = new FMatrix(4,4);
+		}
+		
 		public void initCamera( float z ) {
 			// TODO: actually use some camera settings
 			MatrixMath.identity( xfStack[0] );
@@ -166,13 +203,20 @@ public class Stars
 			// x is left, y is up, z is backwards
 		}
 		
+		float nearZ = 0.1f, farZ = Float.POSITIVE_INFINITY;
+		public void setDrawRange( float nearZ, float farZ ) {
+			this.nearZ = nearZ;
+			this.farZ = farZ;
+		}
+		
 		// Will need to be refactored for 3D, but hang with me
 		public void draw( float t, StarNode n ) {
 			MatrixMath.multiply( xfStack[xfIndex], IDENTITY_VECTOR, scratchVector );
 			float z = scratchVector.get(0,2); 
-			if( z + n.maximumOuterRadius <= 0.1 ) return; // Entirely behind camera
+			if( z + n.maximumOuterRadius <= nearZ ) return; // Entirely behind camera
+			if( z - n.maximumOuterRadius >=  farZ ) return; // Entirely outside range
 			
-			if( z < 0.1 && n.isSolid() ) return;
+			if( z < nearZ && n.isSolid() ) return;
 			
 			float scale = h/1.75f/(z+n.maximumOuterRadius);
 
@@ -298,17 +342,23 @@ public class Stars
 		float gSize = 1500;
 		for( int i=0; i<10; ++i, gSize*=2 ) {
 			chrilden = new HashSet<StarNodeBinding>();
-			chrilden.add(new StarNodeBinding(0, 1, 0, gSize, 0.1f*i+0.00f, -0.0001f, starNode));
-			chrilden.add(new StarNodeBinding(0, 1, 1, gSize, 0.1f*i+0.25f, -0.0001f, starNode));
-			chrilden.add(new StarNodeBinding(1, 1, 0, gSize, 0.1f*i+0.50f, -0.0001f, starNode));
-			chrilden.add(new StarNodeBinding(1, 0, 1, gSize, 0.1f*i+0.75f, -0.0001f, starNode));
-			chrilden.add(new StarNodeBinding(1, 0, 1,     0,        0.00f, -0.0001f, starNode));
+			chrilden.add(new StarNodeBinding(0, 1, 0, gSize, 0.1f*i+0.00f, -0.001f, starNode));
+			chrilden.add(new StarNodeBinding(0, 1, 1, gSize, 0.1f*i+0.33f, -0.001f, starNode));
+			chrilden.add(new StarNodeBinding(1, 1, 0, gSize, 0.1f*i+0.66f, -0.001f, starNode));
+			chrilden.add(new StarNodeBinding(1, 0, 1,     0,        0.00f, -0.001f, starNode));
 			starNode = CompoundNode.aggregate(chrilden);
 		}
 		
+		float dt = 0.01f;
 		final int totalFrameCount = 10*30*60;
-		File outputDir = new File("output/stars");
+		final int framesPerSuperframe = 3;
+		int lastSuperframe = -1;
+		final int miniframesPerFrame = 5;
+		final int microframesPerFrame = 20;
+		File outputDir = new File("output/stars3");
 		if( !outputDir.exists() ) outputDir.mkdirs();
+		
+		final RenderBuffer background = new RenderBuffer(w,h);
 		
 		for( int frame=0; frame<totalFrameCount; ++frame ) {
 			File outputFile = new File(outputDir, String.format("frame%08d.png", frame));
@@ -316,11 +366,53 @@ public class Stars
 			
 			f.setTitle("Stars (Rendering frame "+frame+" of "+totalFrameCount+")");
 			
-			float time = frame*0.01f;
-			float z = time*1500 - 40000;
-			renderer.clear();
-			renderer.initCamera( z );
-			renderer.draw(time, starNode);
+			// Draw really far away stuff only once per superframe
+			if( lastSuperframe >=0 && frame - lastSuperframe < framesPerSuperframe ) {
+				renderer.copyFrom(background);
+			} else {
+				float time = (frame+framesPerSuperframe/2)*dt;
+				float z = time*1500 - 40000;
+				renderer.initCamera( z );
+				renderer.clear();
+				renderer.setDrawRange(30000, Float.POSITIVE_INFINITY);
+				renderer.draw(time, starNode);
+				background.copyFrom(renderer);
+				lastSuperframe = frame;
+			}
+			
+			// Draw medium-distance stuff once per frame
+			renderer.setDrawRange(1500, 30000);
+			{
+				float time = (frame+0.5f)*dt;
+				float z = time*1500 - 40000;
+				renderer.initCamera( z );
+				renderer.draw(time, starNode);
+			}
+
+			renderer.multiply(miniframesPerFrame);
+			// Draw close stuff over and over
+			renderer.setDrawRange(500f, 1500);
+			for( int i=0; i<miniframesPerFrame; ++i ) {
+				float time = (frame+(float)i/miniframesPerFrame)*dt;
+				float z = time*1500 - 40000;
+				renderer.initCamera( z );
+				renderer.draw(time, starNode);
+			}
+			renderer.multiply(1f/miniframesPerFrame);
+			
+			renderer.multiply(microframesPerFrame);
+			// Draw closer stuff over and overer
+			renderer.setDrawRange(0.1f, 500);
+			for( int i=0; i<microframesPerFrame; ++i ) {
+				float time = (frame+(float)i/microframesPerFrame)*dt;
+				float z = time*1500 - 40000;
+				renderer.initCamera( z );
+				renderer.draw(time, starNode);
+			}
+			renderer.multiply(1f/microframesPerFrame);
+			
+			renderer.multiply(10f);
+			
 			renderer.toRGB(pixBuf);
 			synchronized( image ) {
 				image.setRGB(0, 0, w, h, pixBuf, 0, w);
