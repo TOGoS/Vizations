@@ -248,10 +248,31 @@ public class Stars
 				float pg = brightnessPerPixel * n.totalLuminance.g;
 				float pb = brightnessPerPixel * n.totalLuminance.b;
 				
-				for( int py=iMinY; py<iMaxY; ++py ) for( int px=iMinX, i=py*w+px; px<iMaxX; ++px, ++i ) {
+				if( pixelArea == 1 ) {
+					int i = iMinY*w+iMinX;
 					r[i] += pr;
 					g[i] += pg;
 					b[i] += pb;
+				} else {
+					// Draw a nice circle!
+					// TODO: Note that this code is awful.
+					float cpx = w/2 + scale*x;
+					float cpy = h/2 + scale*y;
+					for( int py=iMinY; py<iMaxY; ++py ) {
+						float ppy = py+0.5f;
+						float sin = Math.abs(2*(cpy - ppy)/pixelDiam);
+						if( sin > 1 ) sin = 1;
+						float cos = (float)Math.sqrt(1 - sin*sin);
+						iMinX = (int)(cpx-cos*pixelDiam/2  );
+						if( iMinX < 0 ) iMinX = 0;
+						iMaxX = (int)(cpx+cos*pixelDiam/2+1);
+						if( iMaxX > w ) iMaxX = w;
+						for( int px=iMinX, i=py*w+px; px<iMaxX; ++px, ++i ) {
+							r[i] += pr;
+							g[i] += pg;
+							b[i] += pb;
+						}
+					}
 				}
 			} else {
 				++xfIndex;
