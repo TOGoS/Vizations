@@ -318,6 +318,7 @@ public class Stars
 		});
 		
 		StarNode starNode = new SolidNode(0.5f, new FColor(4f, 2f, 1f));
+		StarNode starNode2 = new SolidNode(20f, new FColor(2f, 3f, 4f));
 		StarRenderer renderer = new StarRenderer( w, h );
 		
 		Set<StarNodeBinding> chrilden = new HashSet<StarNodeBinding>();
@@ -355,13 +356,15 @@ public class Stars
 		starNode = CompoundNode.aggregate(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
-		chrilden.add(new StarNodeBinding(0, 1, 0, 500, 0.00f, -0.005f, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 1, 500, 0.25f, -0.005f, starNode));
-		chrilden.add(new StarNodeBinding(1, 1, 0, 500, 0.50f, -0.005f, starNode));
-		chrilden.add(new StarNodeBinding(1, 0, 1, 500, 0.75f, -0.005f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 0, 500, 0.00f, -0.01f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 1, 500, 0.20f, -0.01f, starNode));
+		chrilden.add(new StarNodeBinding(1, 1, 0, 500, 0.40f, -0.01f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 500, 0.60f, -0.01f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 500, 0.80f, -0.01f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 000, 0.80f, -0.01f, starNode2));
 		starNode = CompoundNode.aggregate(chrilden);
 		
-		float gSize = 1500;
+		float gSize = 1100;
 		for( int i=0; i<10; ++i, gSize*=2 ) {
 			chrilden = new HashSet<StarNodeBinding>();
 			chrilden.add(new StarNodeBinding(0, 1, 0, gSize, 0.1f*i+0.00f, -0.001f, starNode));
@@ -377,7 +380,7 @@ public class Stars
 		int lastSuperframe = -1;
 		final int miniframesPerFrame = 5;
 		final int microframesPerFrame = 20;
-		File outputDir = new File("output/stars4");
+		File outputDir = new File("output/stars5");
 		if( !outputDir.exists() ) outputDir.mkdirs();
 		
 		final RenderBuffer background = new RenderBuffer(w,h);
@@ -395,7 +398,7 @@ public class Stars
 				renderer.copyFrom(background);
 			} else {
 				float time = (frame+framesPerSuperframe/2)*dt;
-				float camZ = time*1500 - 40000;
+				float camZ = time*3000 - 40000;
 				renderer.initCamera( camX, camY, camZ );
 				renderer.clear();
 				renderer.setDrawRange(30000, Float.POSITIVE_INFINITY);
@@ -408,7 +411,7 @@ public class Stars
 			renderer.setDrawRange(1500, 30000);
 			{
 				float time = (frame+0.5f)*dt;
-				float camZ = time*1500 - 40000;
+				float camZ = time*3000 - 40000;
 				renderer.initCamera( camX, camY, camZ );
 				renderer.draw(time, starNode);
 			}
@@ -418,7 +421,7 @@ public class Stars
 			renderer.setDrawRange(500f, 1500);
 			for( int i=0; i<miniframesPerFrame; ++i ) {
 				float time = (frame+(float)i/miniframesPerFrame)*dt;
-				float camZ = time*1500 - 40000;
+				float camZ = time*3000 - 40000;
 				renderer.initCamera( camX, camY, camZ );
 				renderer.draw(time, starNode);
 			}
@@ -429,7 +432,7 @@ public class Stars
 			renderer.setDrawRange(0.1f, 500);
 			for( int i=0; i<microframesPerFrame; ++i ) {
 				float time = (frame+(float)i/microframesPerFrame)*dt;
-				float camZ = time*1500 - 40000;
+				float camZ = time*3000 - 40000;
 				renderer.initCamera( camX, camY, camZ );
 				renderer.draw(time, starNode);
 			}
