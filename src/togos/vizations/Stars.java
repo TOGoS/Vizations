@@ -1,5 +1,6 @@
 package togos.vizations;
 
+import java.awt.Color;
 import java.awt.Frame;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -7,6 +8,10 @@ import java.awt.image.BufferedImage;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+
+import togos.vizations.math.FAxisAngle;
+import togos.vizations.math.FMatrix;
+import togos.vizations.math.MatrixMath;
 
 public class Stars
 {
@@ -36,7 +41,7 @@ public class Stars
 	}
 	
 	static class StarNodeBinding {
-		final float orbitalAxisX, orbitalAxisY, orbitalAxisZ;
+		final float orbitalScaleX, orbitalScaleY, orbitalScaleZ;
 		final float orbitalDistance, orbitalPhase, orbitalSpeed;
 		final StarNode child;
 		
@@ -45,9 +50,9 @@ public class Stars
 			float orbitalDistance, float orbitalPhase, float orbitalSpeed,
 			StarNode child
 		) {
-			this.orbitalAxisX = orbitalAxisX;
-			this.orbitalAxisY = orbitalAxisY;
-			this.orbitalAxisZ = orbitalAxisZ;
+			this.orbitalScaleX = orbitalAxisX;
+			this.orbitalScaleY = orbitalAxisY;
+			this.orbitalScaleZ = orbitalAxisZ;
 			this.orbitalDistance = orbitalDistance;
 			this.orbitalPhase = orbitalPhase;
 			this.orbitalSpeed = orbitalSpeed;
@@ -97,9 +102,21 @@ public class Stars
 	//// Render
 	
 	static class StarRenderer {
+		static final FMatrix IDENTITY_VECTOR = new FMatrix(1,4);
+		static final FMatrix X_VECTOR = new FMatrix(1,4);
+		static {
+			IDENTITY_VECTOR.put(0,3,1);
+			X_VECTOR.put(0,3,1);
+			X_VECTOR.put(0,0,1);
+		}
+				
 		final int w, h;
 		final float[] r, g, b;
 		final FMatrix[] xfStack = new FMatrix[64];
+		int xfIndex = 0;
+		final FMatrix scratchVector = new FMatrix(1,4);
+		final FMatrix scratchMatrix = new FMatrix(4,4);
+		final FAxisAngle scratchAxisAngle = new FAxisAngle();
 		
 		public StarRenderer( int w, int h ) {
 			this.w = w; this.h = h;
@@ -129,45 +146,69 @@ public class Stars
 			for( int i=w*h-1; i>=0; --i ) r[i] = g[i] = b[i] = 0;
 		}
 		
+		public void initCamera( float z ) {
+			// TODO: actually use some camera settings
+			MatrixMath.identity( xfStack[0] );
+			xfStack[0].put(3, 2, -z);
+			xfStack[0].put(3, 1, 40);
+			// x is left, y is up, z is backwards
+		}
+		
 		// Will need to be refactored for 3D, but hang with me
-		public void draw( double time, StarNode n, float x, float y, float scale ) {
-			float apparentRadius = n.maximumOuterRadius * scale;
-			if(
-				x + apparentRadius <= 0 ||
-				x - apparentRadius >= w ||
-				y + apparentRadius <= 0 ||
-				y - apparentRadius >= h
-			) return;
+		public void draw( float t, StarNode n ) {
+			MatrixMath.multiply( xfStack[xfIndex], IDENTITY_VECTOR, scratchVector );
+			float z = scratchVector.get(0,2); 
+			if( z + n.maximumOuterRadius <= 0.1 ) return; // Entirely behind camera
 			
-			int pixelDiam = (int)(apparentRadius * 2 + 0.5f);
-			if( pixelDiam < 1 ) pixelDiam = 1;
+			if( z < 0.1 && n.isSolid() ) return;
 			
-			if( pixelDiam == 1 || n.isSolid() ) {
-				// TODO: if numbers are huge, make them fit in an int
-				// such that area can still be computed,
-				// or else do some special case for hugeness.
-				int minX = (int)(x - apparentRadius    );
-				int maxX = (int)(x + pixelDiam);
-				int minY = (int)(y - apparentRadius    );
-				int maxY = (int)(y + pixelDiam);
-				float luminosityPerPixel = 0.2f;
-				float pr = n.totalLuminosity.r * luminosityPerPixel;
-				float pg = n.totalLuminosity.g * luminosityPerPixel;
-				float pb = n.totalLuminosity.b * luminosityPerPixel;
-				minX = minX < 0 ? 0 : minX;  maxX = maxX > w ? w : maxX;
-				minY = minY < 0 ? 0 : minY;  maxY = maxY > h ? h : maxY;
-				for( int py=minY; py<maxY; ++py ) for( int px=minX, i=minX+w*py; px<maxX; ++px, ++i ) {
-					r[i] += pr; g[i] += pg; b[i] += pb;
+			float scale = h/1.75f/(z+n.maximumOuterRadius);
+
+			float x = scratchVector.get(0,0);
+			float minX = w/2 + scale*(x-n.maximumOuterRadius);
+			float maxX = w/2 + scale*(x+n.maximumOuterRadius)+1;
+			float y = scratchVector.get(0,1);
+			float minY = h/2 + scale*(y-n.maximumOuterRadius);
+			float maxY = h/2 + scale*(y+n.maximumOuterRadius)+1;
+			
+			if( z > 0 ) {
+				if( minX >= w ) return;
+				if( maxX <= 0 ) return;
+				if( minY >= h ) return;
+				if( maxY <= 0 ) return;
+			}
+			
+			float pixelDiam = scale*n.maximumOuterRadius*2;
+			if( z > 0 && pixelDiam <= 1 || n.isSolid() ) {
+				
+				if( minX < 0 ) minX = 0; if( maxX > w ) maxX = w;
+				if( minY < 0 ) minY = 0; if( maxY > h ) maxY = h;
+				int iMinX = (int)minX; 	int iMaxX = (int)maxX;
+				int iMinY = (int)minY; 	int iMaxY = (int)maxY;
+				
+				float pixelArea = pixelDiam*pixelDiam;
+				float marmar = n.maximumOuterRadius*n.maximumOuterRadius;
+				
+				float brightness = pixelArea / marmar;
+				for( int py=iMinY; py<iMaxY; ++py ) for( int px=iMinX, i=py*w+px; px<iMaxX; ++px, ++i ) {
+					r[i] += brightness * n.totalLuminosity.r;
+					g[i] += brightness * n.totalLuminosity.g;
+					b[i] += brightness * n.totalLuminosity.b;
 				}
 			} else {
+				++xfIndex;
 				for( StarNodeBinding snb : n.getChildren() ) {
-					double totalPhase = snb.orbitalPhase + time * snb.orbitalSpeed;
-					draw( time, snb.child,
-						x + scale * snb.orbitalDistance * (float)Math.cos( totalPhase*Math.PI*2 ),
-						y + scale * snb.orbitalDistance * (float)Math.sin( totalPhase*Math.PI*2 ),
-						scale
-					);
+					double phase = Math.PI*2*(snb.orbitalPhase + snb.orbitalSpeed * t);
+					
+					MatrixMath.identity(scratchMatrix);
+					scratchMatrix.put(3, 0, (float)Math.sin(phase)*snb.orbitalDistance);
+					scratchMatrix.put(3, 2, ((xfIndex+0)%2)*(float)Math.cos(phase)*snb.orbitalDistance);
+					scratchMatrix.put(3, 1, ((xfIndex+1)%2)*(float)Math.cos(phase)*snb.orbitalDistance);
+					
+					MatrixMath.multiply( xfStack[xfIndex-1], scratchMatrix, xfStack[xfIndex] );
+					draw( t, snb.child );
 				}
+				--xfIndex;
 			}
 		}
 	}
@@ -175,7 +216,10 @@ public class Stars
 	//// UI
 	
 	public static void main( String[] args ) throws InterruptedException {
-		final int w = 320, h = 180;
+		final int w = 640, h = 360;
+		//final int w = 320, h = 180;
+		//final int w = 160, h = 90;
+		//final int w = 80, h = 45;
 		final BufferedImage image = new BufferedImage( w, h, BufferedImage.TYPE_INT_ARGB );
 		final int[] pixBuf = new int[w*h];
 		
@@ -193,45 +237,73 @@ public class Stars
 			}
 		});
 		
-		StarNode starNode = new SolidNode(0.01f, new Luminosity(5,4,3));
+		StarNode starNode = new SolidNode(0.5f, new Luminosity(0.4f, 0.2f, 0.1f));
 		StarRenderer renderer = new StarRenderer( w, h );
 		
 		Set<StarNodeBinding> chrilden = new HashSet<StarNodeBinding>();
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.2f, 0.00f, 1, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.2f, 0.33f, 1, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.2f, 0.66f, 1, starNode));
-		
+		chrilden.add(new StarNodeBinding(1, 0, 0, 2f, 0.00f, 2f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 0, 2f, 0.33f, 2f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 0, 2f, 0.66f, 2f, starNode));
 		starNode = new CompoundNode(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.5f, 0.00f, -1, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.6f, 0.25f, -0.8f, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.5f, 0.50f, -1, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 0.6f, 0.75f, -0.8f, starNode));
-		
+		chrilden.add(new StarNodeBinding(0, 1, 0, 6, 0.00f, -1, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 1, 6, 0.25f, -0.8f, starNode));
+		chrilden.add(new StarNodeBinding(1, 1, 0, 6, 0.50f, -1, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 6, 0.75f, -0.8f, starNode));
 		starNode = new CompoundNode(chrilden);
 		
 		chrilden = new HashSet<StarNodeBinding>();
-		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.00f, -1.0f, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.25f, -1.1f, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.50f, -1.2f, starNode));
-		chrilden.add(new StarNodeBinding(0, 1, 0, 1f, 0.75f, -1.3f, starNode));
-		
+		chrilden.add(new StarNodeBinding(0, 1, 0, 24, 0.00f, -0.5f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 1, 24, 0.25f, -0.5f, starNode));
+		chrilden.add(new StarNodeBinding(1, 1, 0, 24, 0.50f, -0.5f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 24, 0.75f, -0.5f, starNode));
 		starNode = new CompoundNode(chrilden);
 		
-		double phase = 0.0;
-		int i = 1;
-		while( true ) {
+		chrilden = new HashSet<StarNodeBinding>();
+		chrilden.add(new StarNodeBinding(0, 1, 0, 96, 0.00f, -0.2f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 1, 96, 0.25f, -0.2f, starNode));
+		chrilden.add(new StarNodeBinding(1, 1, 0, 96, 0.50f, -0.2f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 96, 0.75f, -0.2f, starNode));
+		starNode = new CompoundNode(chrilden);
+
+		chrilden = new HashSet<StarNodeBinding>();
+		chrilden.add(new StarNodeBinding(0, 1, 0, 200, 0.00f, -0.05f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 1, 200, 0.25f, -0.05f, starNode));
+		chrilden.add(new StarNodeBinding(1, 1, 0, 200, 0.50f, -0.05f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 200, 0.75f, -0.05f, starNode));
+		starNode = new CompoundNode(chrilden);
+		
+		chrilden = new HashSet<StarNodeBinding>();
+		chrilden.add(new StarNodeBinding(0, 1, 0, 500, 0.00f, -0.005f, starNode));
+		chrilden.add(new StarNodeBinding(0, 1, 1, 500, 0.25f, -0.005f, starNode));
+		chrilden.add(new StarNodeBinding(1, 1, 0, 500, 0.50f, -0.005f, starNode));
+		chrilden.add(new StarNodeBinding(1, 0, 1, 500, 0.75f, -0.005f, starNode));
+		starNode = new CompoundNode(chrilden);
+		
+		float gSize = 1500;
+		for( int i=0; i<10; ++i, gSize*=2 ) {
+			chrilden = new HashSet<StarNodeBinding>();
+			chrilden.add(new StarNodeBinding(0, 1, 0, gSize, 0.1f*i+0.00f, -0.0001f, starNode));
+			chrilden.add(new StarNodeBinding(0, 1, 1, gSize, 0.1f*i+0.25f, -0.0001f, starNode));
+			chrilden.add(new StarNodeBinding(1, 1, 0, gSize, 0.1f*i+0.50f, -0.0001f, starNode));
+			chrilden.add(new StarNodeBinding(1, 0, 1, gSize, 0.1f*i+0.75f, -0.0001f, starNode));
+			chrilden.add(new StarNodeBinding(1, 0, 1,     0,        0.00f, -0.0001f, starNode));
+			starNode = new CompoundNode(chrilden);
+		}
+
+		for( int frame=0; frame<10*30*60; ++frame ) {
+			float time = frame*0.01f;
+			float z = time*1500 - 40000;
 			renderer.clear();
-			renderer.draw(phase, starNode, w/2f, h/2f, Math.min(w,h)*10/i);
+			renderer.initCamera( z );
+			renderer.draw(time, starNode);
 			renderer.toRGB(pixBuf);
 			synchronized( image ) {
 				image.setRGB(0, 0, w, h, pixBuf, 0, w);
 			}
 			ic.setImage(image);
-			Thread.sleep(50);
-			phase += 0.01;
-			++i;
+			//Thread.sleep(50);
 		}
 	}
 }
