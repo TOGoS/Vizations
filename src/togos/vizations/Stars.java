@@ -5,9 +5,13 @@ import java.awt.Frame;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+
+import javax.imageio.ImageIO;
 
 import togos.vizations.math.FAxisAngle;
 import togos.vizations.math.FMatrix;
@@ -215,7 +219,7 @@ public class Stars
 	
 	//// UI
 	
-	public static void main( String[] args ) throws InterruptedException {
+	public static void main( String[] args ) throws InterruptedException, IOException {
 		final int w = 640, h = 360;
 		//final int w = 320, h = 180;
 		//final int w = 160, h = 90;
@@ -291,8 +295,17 @@ public class Stars
 			chrilden.add(new StarNodeBinding(1, 0, 1,     0,        0.00f, -0.0001f, starNode));
 			starNode = new CompoundNode(chrilden);
 		}
-
-		for( int frame=0; frame<10*30*60; ++frame ) {
+		
+		final int totalFrameCount = 10*30*60;
+		File outputDir = new File("output/stars");
+		if( !outputDir.exists() ) outputDir.mkdirs();
+		
+		for( int frame=0; frame<totalFrameCount; ++frame ) {
+			File outputFile = new File(outputDir, String.format("frame%08d.png", frame));
+			if( outputFile.exists() ) continue;
+			
+			f.setTitle("Stars (Rendering frame "+frame+" of "+totalFrameCount+")");
+			
 			float time = frame*0.01f;
 			float z = time*1500 - 40000;
 			renderer.clear();
@@ -303,7 +316,8 @@ public class Stars
 				image.setRGB(0, 0, w, h, pixBuf, 0, w);
 			}
 			ic.setImage(image);
-			//Thread.sleep(50);
+			
+			ImageIO.write( image, "png", outputFile );
 		}
 	}
 }
