@@ -195,11 +195,12 @@ public class Stars
 			for( int i=0; i<xfStack.length; ++i ) xfStack[i] = new FMatrix(4,4);
 		}
 		
-		public void initCamera( float z ) {
+		public void initCamera( float x, float y, float z ) {
 			// TODO: actually use some camera settings
 			MatrixMath.identity( xfStack[0] );
+			xfStack[0].put(3, 0, -x);
+			xfStack[0].put(3, 1, -y);
 			xfStack[0].put(3, 2, -z);
-			xfStack[0].put(3, 1, 40);
 			// x is left, y is up, z is backwards
 		}
 		
@@ -376,7 +377,7 @@ public class Stars
 		int lastSuperframe = -1;
 		final int miniframesPerFrame = 5;
 		final int microframesPerFrame = 20;
-		File outputDir = new File("output/stars3");
+		File outputDir = new File("output/stars4");
 		if( !outputDir.exists() ) outputDir.mkdirs();
 		
 		final RenderBuffer background = new RenderBuffer(w,h);
@@ -387,13 +388,15 @@ public class Stars
 			
 			f.setTitle("Stars (Rendering frame "+frame+" of "+totalFrameCount+")");
 			
+			float camX = 0, camY = 40;
+			
 			// Draw really far away stuff only once per superframe
 			if( lastSuperframe >=0 && frame - lastSuperframe < framesPerSuperframe ) {
 				renderer.copyFrom(background);
 			} else {
 				float time = (frame+framesPerSuperframe/2)*dt;
-				float z = time*1500 - 40000;
-				renderer.initCamera( z );
+				float camZ = time*1500 - 40000;
+				renderer.initCamera( camX, camY, camZ );
 				renderer.clear();
 				renderer.setDrawRange(30000, Float.POSITIVE_INFINITY);
 				renderer.draw(time, starNode);
@@ -405,8 +408,8 @@ public class Stars
 			renderer.setDrawRange(1500, 30000);
 			{
 				float time = (frame+0.5f)*dt;
-				float z = time*1500 - 40000;
-				renderer.initCamera( z );
+				float camZ = time*1500 - 40000;
+				renderer.initCamera( camX, camY, camZ );
 				renderer.draw(time, starNode);
 			}
 
@@ -415,8 +418,8 @@ public class Stars
 			renderer.setDrawRange(500f, 1500);
 			for( int i=0; i<miniframesPerFrame; ++i ) {
 				float time = (frame+(float)i/miniframesPerFrame)*dt;
-				float z = time*1500 - 40000;
-				renderer.initCamera( z );
+				float camZ = time*1500 - 40000;
+				renderer.initCamera( camX, camY, camZ );
 				renderer.draw(time, starNode);
 			}
 			renderer.multiply(1f/miniframesPerFrame);
@@ -426,8 +429,8 @@ public class Stars
 			renderer.setDrawRange(0.1f, 500);
 			for( int i=0; i<microframesPerFrame; ++i ) {
 				float time = (frame+(float)i/microframesPerFrame)*dt;
-				float z = time*1500 - 40000;
-				renderer.initCamera( z );
+				float camZ = time*1500 - 40000;
+				renderer.initCamera( camX, camY, camZ );
 				renderer.draw(time, starNode);
 			}
 			renderer.multiply(1f/microframesPerFrame);
