@@ -17,7 +17,7 @@ public class MatrixMath
 		for( int y=0; y<dest.h; ++y ) for( int x=0; x<dest.w; ++x ) {
 			float v = 0;
 			for( int d=0; d<a.w; ++d ) {
-				v += a.get(y, d) * b.get(x, d);
+				v += a.get(d, y) * b.get(x, d);
 			}
 			dest.put(x, y, v);
 		}
