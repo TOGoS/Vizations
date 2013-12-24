@@ -65,6 +65,8 @@ public class MotionBlurDemo
 	}
 	
 	class LeCanv extends Canvas {
+		private static final long serialVersionUID = 1L;
+		
 		BufferedImage img;
 		int[] pix;
 		int bufWidth, bufHeight;
@@ -76,7 +78,7 @@ public class MotionBlurDemo
 			pix = new int[w*h];
 			this.bufWidth = w;
 			this.bufHeight = h;
-			setBackground(Color.BLACK);
+			setBackground(new Color(0.1f, 0.1f, 0.1f));
 		}
 		
 		protected void drawRect( int x, int y, int w, int h, int color ) {
@@ -108,21 +110,21 @@ public class MotionBlurDemo
 			return (float)r.nextGaussian();
 		}
 		
-		protected void makeSparks( float x, float y, float vx, float vy, int color ) {
+		protected void makeSparks( float x, float y, float vx, float vy, int color, float dist ) {
 			for( int i=0; i<r.nextInt(100); ++i ) {
 				Spark s = new Spark();
 				s.x = x; s.y = y;
 				s.vx = vx + nextGaus();
 				s.vy = vy + nextGaus();
-				s.x += vx * 10;
-				s.y += vy * 10;
+				s.x += vx * dist;
+				s.y += vy * dist;
 				s.color = color;
 				sparks.add(s);
 			}
 		}
 		
 		protected void makeSparks( float x, float y, float vx, float vy ) {
-			makeSparks( x, y, vx, vy, 0xFF443322 );
+			makeSparks( x, y, vx, vy, 0xFF443322, 10 );
 		}
 		
 		protected void draw() {
@@ -172,7 +174,7 @@ public class MotionBlurDemo
 				Spark t = i.next();
 				if( t.destroy ) {
 					i.remove();
-					makeSparks(t.x, t.y, t.vx, t.vy, 0xFF112244);
+					makeSparks(t.x, t.y, t.vx, t.vy, 0xFF112244, 0);
 				}
 			}
 			updateSparks();
@@ -192,17 +194,25 @@ public class MotionBlurDemo
 		public void paint(Graphics g) {
 			drawOuter();
 			img.setRGB(0, 0, img.getWidth(), img.getHeight(), pix, 0, img.getWidth());
-			g.drawImage(img, 0, 0, null);
+			g.drawImage(img, (getWidth()-img.getWidth())/2, (getHeight()-img.getHeight())/2, null);
 		}
 		
 		@Override public void update(Graphics g) {
 			paint(g);
 		}
+
+		public float componentToWorldX( int x ) {
+			return x - (getWidth()-img.getWidth())/2;
+		}
+		public float componentToWorldY( int y ) {
+			return y - (getHeight()-img.getHeight())/2;
+		}
+
 	}
 	
 	public static void main( String[] args ) throws InterruptedException {
 		final MotionBlurDemo mbd = new MotionBlurDemo(); 
-		LeCanv lc = mbd.new LeCanv(800, 600);
+		final LeCanv lc = mbd.new LeCanv(800, 600);
 		Frame f = new Frame();
 		f.add(lc);
 		f.pack();
@@ -211,13 +221,15 @@ public class MotionBlurDemo
 				System.exit(0);
 			}
 		});
+		// Since rendering is also done in the AWT event handling thread,
+		// no need to worry about concurrency issues, tee-hee.
 		lc.addKeyListener(new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent e) {
 				Spark t = new Spark();
 				t.x = 0;
 				t.y = 300;
-				t.vx = 10;
+				t.vx = (float)Math.random()*10;
 				t.vy = (float)Math.random()*4-2;
 				mbd.things.add(t);
 			}
@@ -226,8 +238,8 @@ public class MotionBlurDemo
 			@Override
 			public void mouseClicked(MouseEvent mEvt) {
 				Spark t = new Spark();
-				t.x = mEvt.getX();
-				t.y = mEvt.getY();
+				t.x = lc.componentToWorldX(mEvt.getX());
+				t.y = lc.componentToWorldY(mEvt.getY());
 				mbd.things.add(t);
 				//mbd.gravX = mEvt.getX();
 				//mbd.gravY = mEvt.getY();
